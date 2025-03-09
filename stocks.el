@@ -7,7 +7,7 @@
 ;; Modified: February 27, 2025
 ;; Version: 0.0.1
 ;; Keywords: finance news tools
-;; Homepage: https://github.com/krishnakg/stocks
+;; Homepage: https://github.com/krishnakg/stocks.el
 ;; Package-Requires: ((emacs "27.1"))
 ;;
 ;; This file is not part of GNU Emacs.
@@ -19,29 +19,32 @@
 ;;; Code:
 (provide 'stocks)
 
-
-(defun stocks-ticker ()
-  "Fetches the stock information for the company at point, and outputs the stock
-ticker for the company in the mini-buffer."
+(defun stocks-ticker-at-point ()
+  "Fetches the stock information for the company at point, and outputs the stock"
   (interactive)
-  (gptel-request (thing-at-point 'word t)
-    :system "You are a helpful assistant. If this is a name of a company return the stock ticker of the company, no other text.\n
-                           If this is not a company name, or if there is no ticker, just return an empty string."
-    :callback #'stocks-response))
+  (stocks-ticker (thing-at-point 'word t)))
 
-(defun stocks-response (response info)
+(defun stocks-ticker (symbol)
+  "Fetches the stock information for the provided symbol, and outputs the stock
+ticker for the company in the mini-buffer."
+  (interactive "sStock symbol: ")
+  (gptel-request symbol
+    :system "You are a helpful assistant. If this is a name of a company return the stock ticker of the company, no other text.\n
+             If this is not a company name, or if there is no ticker, just return an empty string."
+    :callback #'stocks-symbol-response))
+
+(defun stocks-symbol-response (response info)
   "This is the function called by gptel with the stock symbol for our query.
 
-RESPONSE is the response from the GPT-3 API.
-INFO is additional information from the API.
+RESPONSE is the response from the LLM.
+INFO is additional information from the LLM.
 "
-  (let ((data (stocks-get-api-response response)))
+  (let ((data (stocks-get-quote response)))
     (message (stocks-minibuffer-message response data) )))
 
-(defun stocks-get-api-response (symbol)
+(defun stocks-get-quote (symbol)
   "Fetch data from the finnhub.io url and parse the json response."
-  (interactive)
-  (let* ((api-key (kg-secret-from-auth-source "finnhub.io"))
+  (let* ((api-key (stocks-secret-from-auth-source "finnhub.io"))
          (url (concat "https://finnhub.io/api/v1/quote?symbol=" symbol "&token=" api-key))
          (data (stocks-fetch-json-from-api url)))
     data))
@@ -78,7 +81,8 @@ The change value is nil for non-existing symbols.
 
 (defun stocks-format-change (change percent)
   "Formats how the stock change numbers are displayed.
-if PERCENT is true, then a % sign and enclosing parenthesis are added to the display string.
+if PERCENT is true, then a % sign and enclosing parenthesis are added
+to the display string.
 if CHANGE is positive, the display string is green, else it;s red.
 "
   (let ((color (if (> change 0)
@@ -93,6 +97,10 @@ if CHANGE is positive, the display string is green, else it;s red.
   "Format's the current PRICE part of the output"
   (propertize (format "%.2f" price) 'face '(:weight bold)))
 
+(defun stocks-secret-from-auth-source (host)
+  "Fetch the secret from the auth-source for the HOST."
+  (funcall (plist-get (car (auth-source-search :host host :require '(:secret))) :secret)))
+
 ;; Test strings below to verify functionality
 ;; Google
 ;; Hello
@@ -100,6 +108,5 @@ if CHANGE is positive, the display string is green, else it;s red.
 ;; Reliance
 ;; Tesla
 ;; Palantir
-
 
 ;;; stocks.el ends here
