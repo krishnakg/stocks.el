@@ -19,6 +19,10 @@
 ;;; Code:
 (provide 'stocks)
 
+(require 'gptel)
+(require 'json)
+(require 'url)
+
 (defun stocks-ticker-at-point ()
   "Fetches the stock information for the company at point, and outputs the stock"
   (interactive)
@@ -67,8 +71,6 @@ The change value is nil for non-existing symbols.
 
 (defun stocks-fetch-json-from-api (url)
   "Fetch JSON from URL and return it as a parsed Lisp object."
-  (require 'json)
-  (require 'url)
   (let* ((url-buffer (url-retrieve-synchronously url t))
          (json-object-type 'hash-table)
          (json-array-type 'list)
