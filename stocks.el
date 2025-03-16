@@ -23,6 +23,11 @@
 (require 'json)
 (require 'url)
 
+(defcustom stocks-api-base-url "https://finnhub.io/api/v1"
+  "The base URL for the stock API."
+  :group 'stocks
+  :type 'string)
+
 (defun stocks-ticker-at-point ()
   "Fetches the stock information for the company at point, and outputs the stock"
   (interactive)
@@ -31,11 +36,20 @@
 (defun stocks-ticker (symbol)
   "Fetches the stock information for the provided symbol, and outputs the stock
 ticker for the company in the mini-buffer."
-  (interactive "sStock symbol: ")
+  (interactive "sCompany name/symbol: ")
   (gptel-request symbol
     :system "You are a helpful assistant. If this is a name of a company return the stock ticker of the company, no other text.\n
              If this is not a company name, or if there is no ticker, just return an empty string."
     :callback #'stocks-symbol-response))
+
+(gptel-make-tool
+ :name "get-stock-quote"
+ :function #'stocks-get-quote
+ :description "Get the stock quote as well as change in price for a company"
+ :args (list '(:name "symbol"
+               :type "string"
+               :description "The company stock ticker symbol for which to get the stock quote"))
+ :category "tools")
 
 (defun stocks-symbol-response (response info)
   "This is the function called by gptel with the stock symbol for our query.
@@ -47,9 +61,19 @@ INFO is additional information from the LLM.
     (message (stocks-minibuffer-message response data) )))
 
 (defun stocks-get-quote (symbol)
-  "Fetch data from the finnhub.io url and parse the json response."
+  "Fetch data from the finnhub.io url and parse the json response.
+
+The JSON response is a hash-table with the following keys:
+c - current price
+d - change in price
+dp - percent change in price
+h - high price of the day
+l - low price of the day
+o - open price of the day
+pc - previous close price
+"
   (let* ((api-key (stocks-secret-from-auth-source "finnhub.io"))
-         (url (concat "https://finnhub.io/api/v1/quote?symbol=" symbol "&token=" api-key))
+         (url (concat stocks-api-base-url "/quote?symbol=" symbol "&token=" api-key))
          (data (stocks-fetch-json-from-api url)))
     data))
 
@@ -61,12 +85,12 @@ In the JSON-DATA, c is current price
 The change value is nil for non-existing symbols.
 "
   (if-let ((change (gethash 'd json-data)))
-      (let* ((current-price (stocks-format-price (gethash 'c json-data)))
-             (change-str (stocks-format-change change nil))
-             (percent-change (gethash 'dp json-data))
-             (percent-change-str (stocks-format-change percent-change t))
-             (symbol-str (propertize symbol 'face '(:height 1.25 :weight bold))))
-        (concat symbol-str " " current-price " " change-str " " percent-change-str))
+      (let* ((percent-change (gethash 'dp json-data))
+             (percent-change-str (stocks-format-change percent-change t)))
+        (concat  (propertize symbol 'face '(:weight bold))
+                 (format " %s" (stocks-format-price (gethash 'c json-data)))
+                 (format " %s" (stocks-format-change change nil))
+                 (format " %s" percent-change-str)))
     (user-error "Not a valid symbol")))
 
 (defun stocks-fetch-json-from-api (url)
